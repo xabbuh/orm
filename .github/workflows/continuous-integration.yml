@@ -11,14 +11,6 @@ on:
       - src/**
       - tests/**
   push:
-    branches:
-      - "*.x"
-    paths:
-      - .github/workflows/continuous-integration.yml
-      - ci/**
-      - composer.*
-      - src/**
-      - tests/**
 
 env:
   fail-fast: true
