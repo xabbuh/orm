@@ -11,6 +11,7 @@ use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\Index\IndexedColumn;
 use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\DBAL\Schema\Name\UnqualifiedName;
+use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
 use Doctrine\DBAL\Schema\SchemaException;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Type;
@@ -29,6 +30,7 @@ use function array_keys;
 use function array_map;
 use function array_merge;
 use function assert;
+use function class_exists;
 use function count;
 use function current;
 use function enum_exists;
@@ -278,7 +280,12 @@ class DatabaseDriver implements MappingDriver
                 $allForeignKeyColumns = array_merge($allForeignKeyColumns, self::getReferencingColumnNames($foreignKey));
             }
 
-            $primaryKey = $table->getPrimaryKey();
+            if (class_exists(PrimaryKeyConstraint::class)) {
+                $primaryKey = $table->getPrimaryKeyConstraint();
+            } else {
+                $primaryKey = $table->getPrimaryKey();
+            }
+
             if ($primaryKey === null) {
                 throw new MappingException(
                     'Table ' . $tableName . ' has no primary key. Doctrine does not ' .
@@ -286,7 +293,11 @@ class DatabaseDriver implements MappingDriver
                 );
             }
 
-            $pkColumns = self::getIndexedColumns($primaryKey);
+            if ($primaryKey instanceof PrimaryKeyConstraint) {
+                $pkColumns = array_map(static fn (UnqualifiedName $name) => $name->toString(), $primaryKey->getColumnNames());
+            } else {
+                $pkColumns = self::getIndexedColumns($primaryKey);
+            }
 
             sort($pkColumns);
             sort($allForeignKeyColumns);
@@ -496,6 +507,10 @@ class DatabaseDriver implements MappingDriver
     private function getTablePrimaryKeys(Table $table): array
     {
         try {
+            if (class_exists(PrimaryKeyConstraint::class)) {
+                return array_map(static fn (UnqualifiedName $name) => $name->toString(), $table->getPrimaryKeyConstraint()->getColumnNames());
+            }
+
             return self::getIndexedColumns($table->getPrimaryKey());
         } catch (SchemaException) {
             // Do nothing

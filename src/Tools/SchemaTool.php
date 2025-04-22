@@ -324,7 +324,7 @@ class SchemaTool
             $primaryKey = $table->getIndex('primary');
 
             foreach ($table->getIndexes() as $idxKey => $existingIndex) {
-                if (! $existingIndex->isPrimary() && $primaryKey->spansColumns(self::getIndexedColumns($existingIndex))) {
+                if ($existingIndex !== $primaryKey && $primaryKey->spansColumns(self::getIndexedColumns($existingIndex))) {
                     $table->dropIndex($idxKey);
                 }
             }
@@ -863,12 +863,22 @@ class SchemaTool
             }
 
             foreach ($schema->getTables() as $table) {
-                $primaryKey = $table->getPrimaryKey();
+                if (class_exists(PrimaryKeyConstraint::class)) {
+                    $primaryKey = $table->getPrimaryKeyConstraint();
+                } else {
+                    $primaryKey = $table->getPrimaryKey();
+                }
+
                 if ($primaryKey === null) {
                     continue;
                 }
 
-                $columns = self::getIndexedColumns($primaryKey);
+                if ($primaryKey instanceof PrimaryKeyConstraint) {
+                    $columns = array_map(static fn (UnqualifiedName $name) => $name->toString(), $primaryKey->getColumnNames());
+                } else {
+                    $columns = self::getIndexedColumns($primaryKey);
+                }
+
                 if (count($columns) === 1) {
                     $checkSequence = $table->getName() . '_' . $columns[0] . '_seq';
                     if ($deployedSchema->hasSequence($checkSequence) && ! $schema->hasSequence($checkSequence)) {

@@ -10,6 +10,7 @@ use Doctrine\DBAL\Schema\Index as DbalIndex;
 use Doctrine\DBAL\Schema\Index\IndexedColumn;
 use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\DBAL\Schema\Name\UnqualifiedName;
+use Doctrine\DBAL\Schema\PrimaryKeyConstraintEditor;
 use Doctrine\DBAL\Schema\Table as DbalTable;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\Column;
@@ -239,10 +240,15 @@ class SchemaToolTest extends OrmTestCase
 
         self::assertTrue($schema->hasTable('first_entity'), 'Table first_entity should exist.');
 
-        $indexes = $schema->getTable('first_entity')->getIndexes();
+        $table = $schema->getTable('first_entity');
+
+        self::assertTrue($table->hasIndex('primary'), 'Table should have a primary key.');
+
+        $primaryKey = $table->getIndex('primary');
+        $indexes    = $table->getIndexes();
 
         self::assertCount(1, $indexes, 'there should be only one index');
-        self::assertTrue(current($indexes)->isPrimary(), 'index should be primary');
+        self::assertSame($primaryKey, current($indexes), 'index should be primary');
     }
 
     public function testSetDiscriminatorColumnWithoutLength(): void
@@ -282,13 +288,23 @@ class SchemaToolTest extends OrmTestCase
         self::assertTrue($schema->hasTable('joined_derived_root'));
         self::assertTrue($schema->hasTable('joined_derived_child'));
 
-        $rootTable = $schema->getTable('joined_derived_root');
-        self::assertNotNull($rootTable->getPrimaryKey());
-        self::assertSame(['keyPart1_id', 'keyPart2'], self::getIndexedColumns($rootTable->getPrimaryKey()));
+        if (class_exists(PrimaryKeyConstraintEditor::class)) {
+            $rootTable = $schema->getTable('joined_derived_root');
+            self::assertNotNull($rootTable->getPrimaryKeyConstraint());
+            self::assertSame(['keyPart1_id', 'keyPart2'], array_map(static fn (UnqualifiedName $name) => $name->toString(), $rootTable->getPrimaryKeyConstraint()->getColumnNames()));
 
-        $childTable = $schema->getTable('joined_derived_child');
-        self::assertNotNull($childTable->getPrimaryKey());
-        self::assertSame(['keyPart1_id', 'keyPart2'], self::getIndexedColumns($childTable->getPrimaryKey()));
+            $childTable = $schema->getTable('joined_derived_child');
+            self::assertNotNull($childTable->getPrimaryKeyConstraint());
+            self::assertSame(['keyPart1_id', 'keyPart2'], array_map(static fn (UnqualifiedName $name) => $name->toString(), $childTable->getPrimaryKeyConstraint()->getColumnNames()));
+        } else {
+            $rootTable = $schema->getTable('joined_derived_root');
+            self::assertNotNull($rootTable->getPrimaryKey());
+            self::assertSame(['keyPart1_id', 'keyPart2'], self::getIndexedColumns($rootTable->getPrimaryKey()));
+
+            $childTable = $schema->getTable('joined_derived_child');
+            self::assertNotNull($childTable->getPrimaryKey());
+            self::assertSame(['keyPart1_id', 'keyPart2'], self::getIndexedColumns($childTable->getPrimaryKey()));
+        }
 
         $childTableForeignKeys = $childTable->getForeignKeys();
 
